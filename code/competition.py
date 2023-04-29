@@ -109,13 +109,13 @@ if __name__ == "__main__":
     sc = SparkContext()
     sc.setLogLevel("ERROR")
 
-    folder_path = sys.argv[1]
-    input_test_file = sys.argv[2]
-    output_file = sys.argv[3]
+    # folder_path = sys.argv[1]
+    # input_test_file = sys.argv[2]
+    # output_file = sys.argv[3]
 
-    # folder_path = "data"
-    # input_test_file = "data/yelp_val_in.csv"
-    # output_file = "result/task2_3.csv"
+    folder_path = "data"
+    input_test_file = "data/yelp_val.csv"
+    output_file = "result/task.csv"
 
     #other input paths
 
@@ -203,7 +203,20 @@ if __name__ == "__main__":
 
     X_test, user_bus_list = createXtest(test_data_RDD)
 
-    xgbr = xgb.XGBRegressor(verbosity=0, n_estimators=30, random_state=1, max_depth=7)
+    # xgbr = xgb.XGBRegressor(verbosity=0, n_estimators=30, random_state=1, max_depth=7)
+    
+    xgbr = xgb.XGBRegressor(
+        max_depth=7,
+        min_child_weight=1,
+        subsample=0.6,
+        colsample_bytree=0.6,
+        gamma=0,
+        reg_alpha=1,
+        reg_lambda=0,
+        learning_rate=0.05,
+        n_estimators=800
+    )
+
     xgbr.fit(X_train, Y_train)      
 
     model_based_result = xgbr.predict(X_test)
@@ -216,3 +229,31 @@ if __name__ == "__main__":
         result_str += user_bus_list[i][0] + "," + user_bus_list[i][1] + "," + str(result) + "\n"
 
     write_csv_file(result_str, output_file)
+
+    # Calculate RMSE
+
+    with open("result/task.csv") as in_file:
+        guess = in_file.readlines()[1:]
+    with open("data/yelp_val.csv") as in_file:
+        ans = in_file.readlines()[1:]
+    res = {"<1": 0, "1~2": 0, "2~3": 0, "3~4": 0, "4~5": 0}
+    dist_guess = {"<1": 0, "1~2": 0, "2~3": 0, "3~4": 0, "4~5": 0}
+    dist_ans = {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+    large_small = {"large": 0, "small": 0}
+
+    RMSE = 0
+    for i in range(len(guess)):
+        diff = float(guess[i].split(",")[2]) - float(ans[i].split(",")[2])
+        RMSE += diff**2
+        if abs(diff) < 1:
+            res["<1"] = res["<1"] + 1
+        elif 2 > abs(diff) >= 1:
+            res["1~2"] = res["1~2"] + 1
+        elif 3 > abs(diff) >= 2:
+            res["2~3"] = res["2~3"] + 1
+        elif 4 > abs(diff) >= 3:
+            res["3~4"] = res["3~4"] + 1
+        else:
+            res["4~5"] = res["4~5"] + 1
+    RMSE = (RMSE/len(guess))**(1/2)
+    print("RMSE: "+str(RMSE))
