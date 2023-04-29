@@ -204,18 +204,31 @@ if __name__ == "__main__":
     X_test, user_bus_list = createXtest(test_data_RDD)
 
     # xgbr = xgb.XGBRegressor(verbosity=0, n_estimators=30, random_state=1, max_depth=7)
-    
-    xgbr = xgb.XGBRegressor(
-        max_depth=7,
-        min_child_weight=1,
-        subsample=0.6,
-        colsample_bytree=0.6,
-        gamma=0,
-        reg_alpha=1,
-        reg_lambda=0,
-        learning_rate=0.05,
-        n_estimators=800
-    )
+
+    # xgbr = xgb.XGBRegressor(
+    #     max_depth=7,
+    #     min_child_weight=1,
+    #     subsample=0.6,
+    #     colsample_bytree=0.6,
+    #     gamma=0,
+    #     reg_alpha=1,
+    #     reg_lambda=0,
+    #     learning_rate=0.05,
+    #     n_estimators=800
+    # )
+
+    param = {
+        'lambda': 9.92724463758443, 
+        'alpha': 0.2765119705933928, 
+        'colsample_bytree': 0.5, 
+        'subsample': 0.8, 
+        'learning_rate': 0.02, 
+        'max_depth': 17, 
+        'random_state': 2020, 
+        'min_child_weight': 101,
+        'n_estimators': 300,
+    }
+    xgbr = xgb.XGBRegressor(**param)
 
     xgbr.fit(X_train, Y_train)      
 
