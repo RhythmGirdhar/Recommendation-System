@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     DEFAULT_VALUE = 3.5
     NEIGHBORS = 15
-    ALPHA = 0.02
+    ALPHA = 0
 
     train_data_RDD = sc.textFile(folder_path + "/yelp_train.csv")
     header = train_data_RDD.first()
