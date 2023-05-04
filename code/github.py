@@ -28,23 +28,6 @@ def parse_attribute_value(value):
         return float(value) if value else np.nan
 
 def extract_feature_info(feature_vec, entity_type):
-    # """
-    # :param feature:The vector we want to get its feature collection
-    # :param type: The type of estimation we need
-    # :return: the feature output
-    # """
-    # rst = dict()
-    # if len(feature) <= 0:
-    #     return user_default if type == "user" else business_default
-    # array_list = pd.Series([float(i[1]) for i in feature])
-    # rst[f"{type}_avg"] = array_list.mean()
-    # rst[f"{type}_std"] = array_list.std()
-    # rst[f"{type}_kurt"] = array_list.kurt()
-    # rst[f"{type}_skew"] = array_list.skew()
-    # rst[f"{type}_max"] = array_list.max()
-    # rst[f"{type}_min"] = array_list.min()
-    # return rst
-
     if entity_type == "user":
         default_stats = user_default 
     else:
@@ -59,16 +42,14 @@ def extract_feature_info(feature_vec, entity_type):
 
 
 def update_missing_variables(data):
+    data.fillna(0, inplace=True)
+    data["history"] = (2023 - data["yelping_since"].transform(lambda x: int(x[:4]))) * 12 + data["yelping_since"].transform(lambda x: int(x[5:7]))
     data['business_avg'].fillna(business_default['business_avg'],inplace=True)
     data['business_std'].fillna(business_default['business_std'], inplace=True)
     data['business_kurt'].fillna(business_default['business_kurt'], inplace=True)
     data['business_skew'].fillna(business_default['business_skew'], inplace=True)
     data['business_max'].fillna(business_default['business_avg'], inplace=True)
     data['business_min'].fillna(business_default['business_avg'], inplace=True)
-    data.fillna(0, inplace=True)
-    # time data
-    data["history"] = (2023 - data["yelping_since"].transform(lambda x: int(x[:4]))) * 12 + data["yelping_since"].transform(lambda x: int(x[5:7]))
-    
     return data
 
 def vector_column_generation(user_id, business_id):
@@ -85,51 +66,29 @@ def vector_column_generation(user_id, business_id):
     combined_vector_dict = dict(user_vector_dict, **business_vector_dict)
     return dict(base_dict, **combined_vector_dict)
 
-def combine_statistics(user,business_id,score,user_list,business_list):
-    try:
-        u_raw_list = user_list.remove(score)
-        bu_raw_list = business_list.remove(score)
-    except:
-        pass
-    user_stat_dic = get_statistics(u_raw_list, temp=user_default, label='user')    
-    bu_stat_dic = get_statistics(bu_raw_list, temp=business_default, label='business')
-    # initial = {'user_id':user,'business_id':business_id,'y':score}
-    return {'user_id':user,'business_id':business_id,'y':score,**user_stat_dic,**bu_stat_dic}
-
 def get_statistics(raw_list,temp=None,label='user'):
     np_list = pd.Series(raw_list)
-    # stat_dict = dict()
-    # if raw_list and len(raw_list) > 0:
-    #     stat_dict[f'{label}_avg'] = np_list.mean()
-    #     stat_dict[f'{label}_std'] = np_list.std()
-    #     stat_dict[f'{label}_kurt'] = np_list.kurt()
-    #     stat_dict[f'{label}_skew'] = np_list.skew()
-    #     stat_dict[f'{label}_max'] = np_list.max()
-    #     stat_dict[f'{label}_min'] = np_list.min()
-    #     return stat_dict
-    # else:
-    #     return temp
-
-    if raw_list and len(raw_list) > 0:
-        # stats = {
-        #     f"{label}_avg": np_list.mean(),
-        #     f"{label}_std": np_list.std(),
-        #     f"{label}_kurt": np_list.kurt(),
-        #     f"{label}_skew": np_list.skew(),
-        #     f"{label}_max": np_list.max(),
-        #     f"{label}_min": np_list.min(),
-        # } 
+    if raw_list and len(raw_list) > 0: 
         return get_stat_dict(label, np_list)
     else:
         return temp
+
+def combine_statistics(user,business_id,score,user_list,business_list):
+    try:
+        u_without_score = user_list.remove(score)
+        bu_without_score = business_list.remove(score)
+    except:
+        pass
+    user_stat = get_statistics(u_without_score, temp = user_default, label='user')    
+    business_stat = get_statistics(bu_without_score, temp = business_default, label='business')
+    return {'user_id' : user, 'business_id' : business_id, 'y' : score, **user_stat, **business_stat}
 
 def merge_dataframes(data, feature_list, users):
     data = pd.DataFrame(data)
     user_data = pd.DataFrame(users)
 
     for features in feature_list:
-        temp_data = pd.DataFrame(features)
-        data = pd.merge(data, temp_data, on = "business_id", how = "left")
+        data = pd.merge(data, pd.DataFrame(features), on = "business_id", how = "left")
 
     data = pd.merge(data, user_data, on="user_id", how="left")
 
@@ -162,16 +121,18 @@ if __name__ == "__main__":
     tip_file = "/tip.json"
     photo_file = "/photo.json"
 
-    # Variables
-    NUM_OF_PARTITIONS = 20
-    REPARTITIONS = 50
-    LABELS = ['drink', 'food', 'inside', 'menu', 'outside']
-    UNIQUE_VALUE_THRESHOLD = 10
-    MINIMUM_BUSINESS_THRESHOLD = 0.2
+    # Default Stats
     business_default = {"business_avg": 3.75088,"business_std": 0.990780,"business_kurt": 0.48054,"business_skew": -0.70888,'business_max': 5, 'business_min': 1}
     user_default = {"user_avg": 3.75117,"user_std": 1.03238,"user_kurt": 0.33442,"user_skew": -0.70884,'user_max':5,'user_min':1}
 
-    # Get all RDDs from data
+    # Variables
+    REPARTITIONS = 50
+    NUM_OF_PARTITIONS = 20
+    LABELS = ['drink', 'food', 'inside', 'menu', 'outside']
+    UNIQUE_VALUE_THRESHOLD = 10
+    MINIMUM_BUSINESS_THRESHOLD = 0.2
+
+    # 1. Get all RDDs from data
 
     train_data_RDD = sc.textFile(folder_path + "/yelp_train.csv")
     header = train_data_RDD.first()
@@ -181,23 +142,21 @@ if __name__ == "__main__":
     header = test_data_RDD.first()
     test_data_RDD = test_data_RDD.filter(lambda row: row != header).map(lambda row: row.split(","))
 
-    user_agg_rdd = train_data_RDD.map(lambda x:(x[0],float(x[2]))).groupByKey()
-    bu_agg_rdd = train_data_RDD.map(lambda x:(x[1],float(x[2]))).groupByKey()
+    bu_agg = train_data_RDD.map(lambda x:(x[1],float(x[2]))).groupByKey()
+    user_agg = train_data_RDD.map(lambda x:(x[0],float(x[2]))).groupByKey()
 
-    user_dict = train_data_RDD.map(lambda x: (x[0], (x[1], x[2]))).map(lambda x: (x[0], x[1])).groupByKey().mapValues(lambda x: list(x)).collectAsMap()
     business_dict = train_data_RDD.map(lambda x: (x[1], (x[0], x[2]))).map(lambda x: (x[0], x[1])).groupByKey().mapValues(lambda x: list(x)).collectAsMap()
-
+    user_dict = train_data_RDD.map(lambda x: (x[0], (x[1], x[2]))).map(lambda x: (x[0], x[1])).groupByKey().mapValues(lambda x: list(x)).collectAsMap()
+    
     train_rdd = train_data_RDD.map(lambda x:(x[0],(x[1],float(x[2]))))\
-        .join(user_agg_rdd)\
+        .join(user_agg)\
         .map(lambda x:(x[1][0][0],(x[0],x[1][0][1],x[1][1])))\
-        .join(bu_agg_rdd)\
+        .join(bu_agg)\
         .map(lambda x:(x[1][0][0],x[0],x[1][0][1],x[1][0][2],x[1][1]))\
         .repartition(REPARTITIONS)\
-        .map(lambda x:combine_statistics(x[0],x[1],x[2],list(x[3]),list(x[4])))\
-        .collect()
+        .map(lambda x:combine_statistics(x[0],x[1],x[2],list(x[3]),list(x[4])))
 
-
-    # Get features
+    # 2. Get features
 
     # from user.json
     user_test_data_RDD = test_data_RDD.map(lambda row: (row[0], row[1]))
@@ -236,10 +195,18 @@ if __name__ == "__main__":
 
     # from business.json
     lines_business =  sc.textFile(folder_path + business_file).map(lambda x: json.loads(x))
-    business = lines_business.map(lambda x: (x["business_id"], (x["stars"], x["review_count"], x['latitude'], x['longitude'], x['is_open'])))\
-        .map(lambda bu:{"business_id": bu[0], "b_stars": bu[1][0], "b_review_count": bu[1][1], 'latitude': bu[1][2],
-                 'longitude': bu[1][3], 'is_open': bu[1][4]})\
-        .collect()
+    # business = lines_business.map(lambda x: (x["business_id"], (x["stars"], x["review_count"], x['latitude'], x['longitude'], x['is_open'])))\
+    #     .map(lambda bu:{"business_id": bu[0], "b_stars": bu[1][0], "b_review_count": bu[1][1], 'latitude': bu[1][2],
+    #              'longitude': bu[1][3], 'is_open': bu[1][4]})\
+    #     .collect()
+
+    business = lines_business.map(lambda x: {"business_id": x["business_id"], 
+                                          "b_stars": x["stars"], 
+                                          "b_review_count": x["review_count"], 
+                                          "latitude": x["latitude"], 
+                                          "longitude": x["longitude"], 
+                                          "is_open": x["is_open"]}) \
+                          .collect()
 
     num_business = lines_business.count()
 
@@ -276,6 +243,8 @@ if __name__ == "__main__":
     # 3. merge all of dataframe to get the whole data
 
     all_features = [business, business_attribute, tips, photos, checks]
+
+    train_rdd = train_rdd.collect()
 
     train_data = merge_dataframes(train_rdd, all_features, users)
 
